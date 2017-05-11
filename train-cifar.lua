@@ -29,6 +29,7 @@ require 'train-helpers'
 local nninit = require 'nninit'
 
 -- Feel free to comment these out.
+--[[
 hasWorkbook, labWorkbook = pcall(require, 'lab-workbook')
 if hasWorkbook then
   workbook = labWorkbook:newExperiment{}
@@ -40,16 +41,18 @@ if hasWorkbook then
 else
   print "WARNING: No workbook support. No results will be saved."
 end
+--]]
 
 opt = lapp[[
       --batchSize       (default 128)      Sub-batch size
       --iterSize        (default 1)       How many sub-batches in each batch
       --Nsize           (default 3)       Model has 6*n+2 layers.
-      --dataRoot        (default /mnt/cifar) Data root folder
+      --dataRoot        (default ./cifar) Data root folder
       --loadFrom        (default "")      Model to load
       --experimentName  (default "snapshots/cifar-residual-experiment1")
 ]]
 print(opt)
+torch.setnumthreads(1)
 
 -- create data loader
 dataTrain = Dataset.CIFAR(opt.dataRoot, "train", opt.batchSize)
@@ -203,32 +206,33 @@ function forwardBackwardBatch(batch)
     loss_val = loss_val / N
     gradients:mul( 1.0 / N )
 
-    if hasWorkbook then
-      lossLog{nImages = sgdState.nSampledImages,
-              loss = loss_val}
-    end
+    -- lossLog{nImages = sgdState.nSampledImages,
+    --        loss = loss_val}
 
     return loss_val, gradients, inputs:size(1) * N
 end
 
 
-function evalModel()
-    local results = evaluateModel(model, dataTest, opt.batchSize)
+function evalModel(loss_val)
+    local results = evaluateModel(model, loss, dataTest, opt.batchSize)
+    print(string.format("epoch = %d, n_images = %d, train_loss = %f, test_loss = %f, test_error = %f", 
+          sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val, results.loss, 1.0 - results.correct1))
+    --[[ errorLog{nImages = sgdState.nSampledImages or 0,
+             error = 1.0 - results.correct1}
     if hasWorkbook then
-      errorLog{nImages = sgdState.nSampledImages or 0,
-               error = 1.0 - results.correct1}
       if (sgdState.epochCounter or -1) % 10 == 0 then
         workbook:saveTorch("model", model)
         workbook:saveTorch("sgdState", sgdState)
       end
     end
+    --]]
     if (sgdState.epochCounter or 0) > 200 then
         print("Training complete, go home")
         os.exit()
     end
 end
 
-evalModel()
+-- evalModel()
 
 --[[
 require 'graph'
@@ -246,10 +250,12 @@ exploreNcdu(model)
 --]]
 
 -- Begin saving the experiment to our workbook
+--[[
 if hasWorkbook then
   workbook:saveGitStatus()
   workbook:saveJSON("opt", opt)
 end
+--]]
 
 -- --[[
 TrainingHelpers.trainForever(

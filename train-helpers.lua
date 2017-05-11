@@ -22,19 +22,23 @@ freely, subject to the following restrictions:
 require 'optim'
 TrainingHelpers = {}
 
-function evaluateModel(model, datasetTest, batchSize)
-   print("Evaluating...")
+function evaluateModel(model, loss, datasetTest, batchSize)
+   torch.setnumthreads(8)
+   -- print("Evaluating...")
    model:evaluate()
    local correct1 = 0
    local correct5 = 0
    local total = 0
+   local loss_val = 0
    local batches = torch.range(1, datasetTest:size()):long():split(batchSize)
    for i=1,#batches do
        collectgarbage(); collectgarbage();
        local results = datasetTest:sampleIndices(nil, batches[i])
        local batch, labels = results.inputs, results.outputs
        labels = labels:long()
-       local y = model:forward(batch:cuda()):float()
+       local y_cuda = model:forward(batch:cuda())
+       local y = y_cuda:float()
+       loss_val = loss_val + loss:forward(y_cuda, labels:cuda())
        local _, indices = torch.sort(y, 2, true)
        -- indices has shape (batchSize, nClasses)
        local top1 = indices:select(2, 1)
@@ -42,9 +46,11 @@ function evaluateModel(model, datasetTest, batchSize)
        correct1 = correct1 + torch.eq(top1, labels):sum()
        correct5 = correct5 + torch.eq(top5, labels:view(-1, 1):expandAs(top5)):sum()
        total = total + indices:size(1)
-       xlua.progress(total, datasetTest:size())
+       -- xlua.progress(total, datasetTest:size())
    end
-   return {correct1=correct1/total, correct5=correct5/total}
+   loss_val = loss_val / #batches
+   torch.setnumthreads(1)
+   return {correct1=correct1/total, correct5=correct5/total, loss=loss_val}
 end
 
 function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, epochSize, afterEpoch)
@@ -70,14 +76,15 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
       -- Display progress and loss
       sgdState.nSampledImages = sgdState.nSampledImages + batchProcessed
       sgdState.nEvalCounter = sgdState.nEvalCounter + 1
-      xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
+      -- xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
+      print(string.format("epoch = %d, n_image = %d, train_loss = %f", sgdState.epochCounter, sgdState.nSampledImages, loss_val))
 
       if math.floor(sgdState.nSampledImages / epochSize) ~= sgdState.epochCounter then
          -- Epoch completed!
-         xlua.progress(epochSize, epochSize)
+         -- xlua.progress(epochSize, epochSize)
          sgdState.epochCounter = math.floor(sgdState.nSampledImages / epochSize)
-         if afterEpoch then afterEpoch() end
-         print("\n\n----- Epoch "..sgdState.epochCounter.." -----")
+         if afterEpoch then afterEpoch(loss_val) end
+         -- print("\n\n----- Epoch "..sgdState.epochCounter.." -----")
       end
    end
 end
