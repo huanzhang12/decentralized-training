@@ -53,6 +53,9 @@ function evaluateModel(model, loss, datasetTest, batchSize)
    return {correct1=correct1/total, correct5=correct5/total, loss=loss_val}
 end
 
+function TrainingHelpers.Init(opt, params)
+end
+
 function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, epochSize, afterEpoch)
    local d = Date{os.date()}
    local modelTag = string.format("%04d%02d%02d-%d",
@@ -76,12 +79,12 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
       -- Display progress and loss
       sgdState.nSampledImages = sgdState.nSampledImages + batchProcessed
       sgdState.nEvalCounter = sgdState.nEvalCounter + 1
-      -- xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
-      print(string.format("epoch = %d, n_image = %d, train_loss = %f", sgdState.epochCounter, sgdState.nSampledImages, loss_val))
+      xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
+      -- print(string.format("epoch = %d, n_image = %d, train_loss = %f", sgdState.epochCounter, sgdState.nSampledImages, loss_val))
 
       if math.floor(sgdState.nSampledImages / epochSize) ~= sgdState.epochCounter then
          -- Epoch completed!
-         -- xlua.progress(epochSize, epochSize)
+         xlua.progress(epochSize, epochSize)
          sgdState.epochCounter = math.floor(sgdState.nSampledImages / epochSize)
          if afterEpoch then afterEpoch(loss_val) end
          -- print("\n\n----- Epoch "..sgdState.epochCounter.." -----")

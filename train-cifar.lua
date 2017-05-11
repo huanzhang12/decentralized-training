@@ -45,14 +45,25 @@ end
 
 opt = lapp[[
       --batchSize       (default 128)      Sub-batch size
+      --maxIter         (default 200)      How many iterations to run
       --iterSize        (default 1)       How many sub-batches in each batch
       --Nsize           (default 3)       Model has 6*n+2 layers.
       --dataRoot        (default ./cifar) Data root folder
       --loadFrom        (default "")      Model to load
       --experimentName  (default "snapshots/cifar-residual-experiment1")
+      --dstalg          (default "dstsgd")    Distributed algorithm ("dstsgd", "easgd")
+      --nodesFile       (default 'nodes.txt')    A text file with all host names and port number
+      --weightsFile     (default 'weights.txt')  A text file with weights for parameters from different machines
+      --nodeID          (default 0)              Which node is this machine? Set 0 for auto
 ]]
 print(opt)
 torch.setnumthreads(1)
+
+if opt.dstalg == "dstsgd" then
+  require 'train-dstsgd'
+  -- we will change this dynamically
+  opt.iterSize = 9999999
+end
 
 -- create data loader
 dataTrain = Dataset.CIFAR(opt.dataRoot, "train", opt.batchSize)
@@ -158,7 +169,8 @@ end
 
 -- Actual Training! -----------------------------
 weights, gradients = model:getParameters()
-function forwardBackwardBatch(batch)
+TrainingHelpers.Init(opt, weights)
+function forwardBackwardBatch(checkExitCond)
     -- After every batch, the different GPUs all have different gradients
     -- (because they saw different data), and only the first GPU's weights were
     -- actually updated.
@@ -202,6 +214,11 @@ function forwardBackwardBatch(batch)
         local df_dw = loss:backward(y, labels)
         model:backward(inputs, df_dw)
         -- The above call will accumulate all GPUs' parameters onto GPU #1
+        if checkExitCond and checkExitCond() then
+            -- set the real N used
+            N = i
+            break
+        end
     end
     loss_val = loss_val / N
     gradients:mul( 1.0 / N )
@@ -226,10 +243,6 @@ function evalModel(loss_val)
       end
     end
     --]]
-    if (sgdState.epochCounter or 0) > 200 then
-        print("Training complete, go home")
-        os.exit()
-    end
 end
 
 -- evalModel()
