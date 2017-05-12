@@ -68,8 +68,9 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
    if sgdState.whichOptimMethod then
        whichOptimMethod = optim[sgdState.whichOptimMethod]
    end
+   collectgarbage(); collectgarbage()
+   timer = torch.Timer()
    while true do -- Each epoch
-      collectgarbage(); collectgarbage()
       -- Run forward and backward pass on inputs and labels
       local loss_val, gradients, batchProcessed = forwardBackwardBatch()
       -- SGD step: modifies weights in-place
@@ -79,15 +80,18 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
       -- Display progress and loss
       sgdState.nSampledImages = sgdState.nSampledImages + batchProcessed
       sgdState.nEvalCounter = sgdState.nEvalCounter + 1
-      xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
+      -- xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
       -- print(string.format("epoch = %d, n_image = %d, train_loss = %f", sgdState.epochCounter, sgdState.nSampledImages, loss_val))
 
       if math.floor(sgdState.nSampledImages / epochSize) ~= sgdState.epochCounter then
+         timer:stop()
+         collectgarbage(); collectgarbage()
          -- Epoch completed!
-         xlua.progress(epochSize, epochSize)
+         -- xlua.progress(epochSize, epochSize)
          sgdState.epochCounter = math.floor(sgdState.nSampledImages / epochSize)
-         if afterEpoch then afterEpoch(loss_val) end
+         if afterEpoch then afterEpoch(loss_val, timer:time().real) end
          -- print("\n\n----- Epoch "..sgdState.epochCounter.." -----")
+         timer:resume()
       end
    end
 end

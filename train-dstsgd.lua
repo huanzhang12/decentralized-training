@@ -41,12 +41,16 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
    sgdState.epochCounter = sgdState.epochCounter or 0
    sgdState.nSampledImages = sgdState.nSampledImages or 0
    sgdState.nEvalCounter = sgdState.nEvalCounter or 0
+   sgdState.thisEpochImages = sgdState.thisEpochImages or 0
+   sgdState.thisEpochMaxBatch = sgdState.thisEpochMaxBatch or 0
+   sgdState.thisEpochEvalCounter = sgdState.thisEpochEvalCounter or 0
    local whichOptimMethod = optim.sgd
    if sgdState.whichOptimMethod then
        whichOptimMethod = optim[sgdState.whichOptimMethod]
    end
+   collectgarbage(); collectgarbage()
+   timer = torch.Timer()
    while true do -- Each epoch
-      collectgarbage(); collectgarbage()
       -- Run forward and backward pass on inputs and labels
       local loss_val, gradients, batchProcessed = forwardBackwardBatch(dstsgd.CheckIfSyncDone)
       -- got all parameters from peers, averaging!
@@ -57,15 +61,24 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
                        sgdState)
       -- Display progress and loss
       sgdState.nSampledImages = sgdState.nSampledImages + batchProcessed
+      sgdState.thisEpochImages = sgdState.thisEpochImages + batchProcessed
+      sgdState.thisEpochMaxBatch = math.max(sgdState.thisEpochMaxBatch, batchProcessed)
       sgdState.nEvalCounter = sgdState.nEvalCounter + 1
-      xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
+      sgdState.thisEpochEvalCounter = sgdState.thisEpochEvalCounter + 1
+      -- xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
       -- print(string.format("epoch = %d, n_image = %d, train_loss = %f", sgdState.epochCounter, sgdState.nSampledImages, loss_val))
 
       if math.floor(sgdState.nSampledImages / epochSize) ~= sgdState.epochCounter then
+         timer:stop()
+         collectgarbage(); collectgarbage()
          -- Epoch completed!
-         xlua.progress(epochSize, epochSize)
+         -- xlua.progress(epochSize, epochSize)
+         average_batch = sgdState.thisEpochImages / sgdState.thisEpochEvalCounter
          sgdState.epochCounter = math.floor(sgdState.nSampledImages / epochSize)
-         if afterEpoch then afterEpoch(loss_val) end
+         if afterEpoch then afterEpoch(loss_val, timer:time().real, average_batch, sgdState.thisEpochMaxBatch) end
+         sgdState.thisEpochImages = 0
+         sgdState.thisEpochEvalCounter = 0
+         sgdState.thisEpochMaxBatch = 0
          -- print("\n\n----- Epoch "..sgdState.epochCounter.." -----")
          if (sgdState.epochCounter or 0) > opt.maxIter then
             dstsgd.SetExitFlag()
@@ -73,6 +86,7 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
             dstsgd.Terminate()
             os.exit()
          end
+         timer:resume()
       end
    end
 end

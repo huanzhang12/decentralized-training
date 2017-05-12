@@ -232,9 +232,13 @@ function forwardBackwardBatch(checkExitCond)
 end
 
 
-function evalModel(loss_val)
-    print(string.format("epoch = %d, n_images = %d, train_loss = %f", 
-          sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val))
+function evalModel(loss_val, time, average_batch, max_batch)
+    loss_val = loss_val or 0
+    time = time or 0.0
+    average_batch = average_batch or opt.batchSize
+    max_batch = max_batch or opt.batchSize
+    print(string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss = %f", 
+          sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val))
     -- local results = evaluateModel(model, loss, dataTest, opt.batchSize)
     -- print(string.format("epoch = %d, n_images = %d, train_loss = %f, test_loss = %f, test_error = %f", 
     --      sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val, results.loss, 1.0 - results.correct1))
