@@ -221,7 +221,9 @@ function forwardBackwardBatch(checkExitCond)
         end
     end
     loss_val = loss_val / N
-    gradients:mul( 1.0 / N )
+    if N ~= 1 then
+      gradients:mul( 1.0 / N )
+    end
 
     -- lossLog{nImages = sgdState.nSampledImages,
     --        loss = loss_val}
@@ -231,9 +233,11 @@ end
 
 
 function evalModel(loss_val)
-    local results = evaluateModel(model, loss, dataTest, opt.batchSize)
-    print(string.format("epoch = %d, n_images = %d, train_loss = %f, test_loss = %f, test_error = %f", 
-          sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val, results.loss, 1.0 - results.correct1))
+    print(string.format("epoch = %d, n_images = %d, train_loss = %f", 
+          sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val))
+    -- local results = evaluateModel(model, loss, dataTest, opt.batchSize)
+    -- print(string.format("epoch = %d, n_images = %d, train_loss = %f, test_loss = %f, test_error = %f", 
+    --      sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val, results.loss, 1.0 - results.correct1))
     --[[ errorLog{nImages = sgdState.nSampledImages or 0,
              error = 1.0 - results.correct1}
     if hasWorkbook then
