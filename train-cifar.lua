@@ -27,6 +27,7 @@ require 'cudnn'
 require 'nngraph'
 require 'train-helpers'
 local nninit = require 'nninit'
+local posix = require 'posix'
 
 -- Feel free to comment these out.
 --[[
@@ -55,9 +56,10 @@ opt = lapp[[
       --nodesFile       (default 'nodes.txt')    A text file with all host names and port number
       --weightsFile     (default 'weights.txt')  A text file with weights for parameters from different machines
       --nodeID          (default 0)              Which node is this machine? Set 0 for auto
+      --chunkSize       (default 8192)           TCP-IP transfer chunk size (important to maximize transfer rate)
+      --useCPUforComm   (default 1)              Set to 0 to use GPU memory in comminucation threads
 ]]
 print(opt)
-torch.setnumthreads(1)
 
 if opt.dstalg == "dstsgd" then
   require 'train-dstsgd'
@@ -208,11 +210,13 @@ function forwardBackwardBatch(checkExitCond)
         inputs, labels = dataTrain:getBatch()
         inputs = inputs:cuda()
         labels = labels:cuda()
-        collectgarbage(); collectgarbage();
         local y = model:forward(inputs)
         loss_val = loss_val + loss:forward(y, labels)
         local df_dw = loss:backward(y, labels)
         model:backward(inputs, df_dw)
+    --[[
+        collectgarbage(); collectgarbage();
+    --]]
         -- The above call will accumulate all GPUs' parameters onto GPU #1
         if checkExitCond and checkExitCond() then
             -- set the real N used

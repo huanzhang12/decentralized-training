@@ -25,7 +25,12 @@ TrainingHelpers = {}
 
 function TrainingHelpers.Init(opt, params)
    TrainingHelpers.nodes, TrainingHelpers.weights = DecentralizedSGD.LoadConfigFromFile(opt.nodesFile, opt.weightsFile)
-   TrainingHelpers.dstsgd = DecentralizedSGD.Trainer(TrainingHelpers.nodes, TrainingHelpers.weights, opt.nodeID, {params})
+   if opt.useCPUforComm == 1 then
+      -- this will be used as the buffer for averaging
+      TrainingHelpers.cpuParams = params:float()
+      params = TrainingHelpers.cpuParams
+   end
+   TrainingHelpers.dstsgd = DecentralizedSGD.Trainer(TrainingHelpers.nodes, TrainingHelpers.weights, opt.nodeID, {params}, true, opt.chunkSize)
    print("Start init")
    TrainingHelpers.dstsgd.Init()
    print("Init done.")
@@ -48,17 +53,30 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
    if sgdState.whichOptimMethod then
        whichOptimMethod = optim[sgdState.whichOptimMethod]
    end
-   collectgarbage(); collectgarbage()
+   -- copy the initial weights
+   if opt.useCPUforComm == 1 then
+      TrainingHelpers.cpuParams:copy(weights)
+   end
    timer = torch.Timer()
    while true do -- Each epoch
+       collectgarbage(); collectgarbage()
       -- Run forward and backward pass on inputs and labels
       local loss_val, gradients, batchProcessed = forwardBackwardBatch(dstsgd.CheckIfSyncDone)
       -- got all parameters from peers, averaging!
       dstsgd.AverageParameters()
+      -- if we used CPU memory for communication, we copy it back to GPU
+      if opt.useCPUforComm == 1 then
+         weights:copy(TrainingHelpers.cpuParams)
+      end
       -- SGD step: modifies weights in-place
       whichOptimMethod(function() return loss_val, gradients end,
                        weights,
                        sgdState)
+      -- weights update done, start next communication iteration
+      if opt.useCPUforComm == 1 then
+         TrainingHelpers.cpuParams:copy(weights)
+      end
+      dstsgd.StartNextIter()
       -- Display progress and loss
       sgdState.nSampledImages = sgdState.nSampledImages + batchProcessed
       sgdState.thisEpochImages = sgdState.thisEpochImages + batchProcessed
