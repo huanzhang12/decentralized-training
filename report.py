@@ -7,13 +7,15 @@ import random
 nodes_file = sys.argv[1]
 f = open(nodes_file)
 hosts = []
+s = 0
 for line in f:
     line = line.strip()
     if not line:
         continue
     t = line.split(":")
     hosts.append(t[0])
-    s = int(t[1]) / 1000
+    if len(t) > 1:
+        s = int(t[1]) / 1000
 f.close()
 
 f = open(nodes_file, "w")
