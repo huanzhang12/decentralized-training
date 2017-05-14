@@ -241,12 +241,13 @@ function forwardBackwardBatch(checkExitCond)
     return loss_val, gradients, inputs:size(1) * N
 end
 
-local model_save_dir = opt.saveDir .. "/" .. os.date("%m%d%H%M") .. "_rank_" .. self_rank .. "/"
+local model_save_dir = opt.saveDir .. "/" .. os.date("%m%d%H%M") .. "/rank_" .. self_rank .. "/"
 print("Models will be saved to "..model_save_dir)
 os.execute("mkdir -p "..model_save_dir)
 local log = assert(io.open(model_save_dir .. "log.txt", "w"))
-log:write(pretty_write(opt))
-log:write("\n")
+log:write(pretty_write(opt)..'\n')
+log:write(pretty_write(TrainingHelpers.nodes)..'\n')
+log:write(pretty_write(TrainingHelpers.weights)..'\n')
 log:flush()
 function saveModel(epoch, msg)
     model_name = model_save_dir .. epoch .. ".model.t7"
