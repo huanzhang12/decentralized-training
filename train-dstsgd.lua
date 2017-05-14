@@ -57,25 +57,52 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
    if opt.useCPUforComm == 1 then
       TrainingHelpers.cpuParams:copy(weights)
    end
+   local epoch_loss_val = 0.0
+   collectgarbage(); collectgarbage()
    timer = torch.Timer()
    while true do -- Each epoch
-       collectgarbage(); collectgarbage()
+      local checkExitCond
+      if opt.dynBatchSize == 1 then
+         checkExitCond = dstsgd.CheckIfClientSyncDone
+      else
+         checkExitCond = function() return true end
+      end
       -- Run forward and backward pass on inputs and labels
-      local loss_val, gradients, batchProcessed = forwardBackwardBatch(dstsgd.CheckIfSyncDone)
+      local loss_val, gradients, batchProcessed = forwardBackwardBatch(checkExitCond)
+      epoch_loss_val = epoch_loss_val + loss_val
+      if opt.dynBatchSize ~= 1 then
+         -- wait for this batch, synchronously
+         dstsgd.WaitForClientSyncDone()
+      end
+      -- if the ServerSync is done, we are fine to use the original weights
+      local need_keep_param = (not dstsgd.CheckIfServerSyncDone())
       -- got all parameters from peers, averaging!
-      dstsgd.AverageParameters()
-      -- if we used CPU memory for communication, we copy it back to GPU
+      -- keep the model parameter being sent, and make a copy
+      local new_parameters = dstsgd.AverageParameters(need_keep_param)
+      -- print("after average :", need_keep_param, torch.sum(weights), torch.sum(new_parameters["_1"]))
+      -- when use CPU for communication, always need to copy the array to GPU
       if opt.useCPUforComm == 1 then
-         weights:copy(TrainingHelpers.cpuParams)
+         weights:copy(new_parameters["_1"])
       end
       -- SGD step: modifies weights in-place
-      whichOptimMethod(function() return loss_val, gradients end,
-                       weights,
-                       sgdState)
-      -- weights update done, start next communication iteration
+      if opt.useCPUforComm == 0 and need_keep_param then
+         -- in this case, we need to use new_parameters to update, because weights are still being used
+         whichOptimMethod(function() return loss_val, gradients end, new_parameters["_1"], sgdState)
+      else
+         whichOptimMethod(function() return loss_val, gradients end, weights, sgdState)
+      end
+      if need_keep_param then
+         -- wait for server
+         dstsgd.WaitForServerSyncDone()
+      end
       if opt.useCPUforComm == 1 then
+         -- copy weights back to CPU for communication
          TrainingHelpers.cpuParams:copy(weights)
       end
+      if opt.useCPUforComm == 0 and need_keep_param then
+         weights:copy(new_parameters["_1"])
+      end
+      -- weights update done, start next communication iteration
       dstsgd.StartNextIter()
       -- Display progress and loss
       sgdState.nSampledImages = sgdState.nSampledImages + batchProcessed
@@ -85,6 +112,7 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
       sgdState.thisEpochEvalCounter = sgdState.thisEpochEvalCounter + 1
       -- xlua.progress(sgdState.nSampledImages%epochSize, epochSize)
       -- print(string.format("epoch = %d, n_image = %d, train_loss = %f", sgdState.epochCounter, sgdState.nSampledImages, loss_val))
+      collectgarbage(); collectgarbage()
 
       if math.floor(sgdState.nSampledImages / epochSize) ~= sgdState.epochCounter then
          timer:stop()
@@ -93,7 +121,9 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
          -- xlua.progress(epochSize, epochSize)
          average_batch = sgdState.thisEpochImages / sgdState.thisEpochEvalCounter
          sgdState.epochCounter = math.floor(sgdState.nSampledImages / epochSize)
-         if afterEpoch then afterEpoch(loss_val, timer:time().real, average_batch, sgdState.thisEpochMaxBatch) end
+         epoch_loss_val = epoch_loss_val / dataTrain:size() * opt.batchSize
+         if afterEpoch then afterEpoch(epoch_loss_val, timer:time().real, average_batch, sgdState.thisEpochMaxBatch) end
+         epoch_loss_val = 0.0
          sgdState.thisEpochImages = 0
          sgdState.thisEpochEvalCounter = 0
          sgdState.thisEpochMaxBatch = 0

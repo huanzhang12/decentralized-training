@@ -58,6 +58,7 @@ opt = lapp[[
       --nodeID          (default 0)              Which node is this machine? Set 0 for auto
       --chunkSize       (default 8192)           TCP-IP transfer chunk size (important to maximize transfer rate)
       --useCPUforComm   (default 1)              Set to 0 to use GPU memory in comminucation threads
+      --dynBatchSize    (default 0)              Set to 1 to use dynamic batch size
 ]]
 print(opt)
 
@@ -228,6 +229,7 @@ function forwardBackwardBatch(checkExitCond)
     if N ~= 1 then
       gradients:mul( 1.0 / N )
     end
+    -- print("compute batch:", torch.sum(weights), torch.sum(gradients))
 
     -- lossLog{nImages = sgdState.nSampledImages,
     --        loss = loss_val}
@@ -241,10 +243,12 @@ function evalModel(loss_val, time, average_batch, max_batch)
     time = time or 0.0
     average_batch = average_batch or opt.batchSize
     max_batch = max_batch or opt.batchSize
-    print(string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss = %f", 
-          sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val))
-    -- local results = evaluateModel(model, loss, dataTest, opt.batchSize)
-    -- print(string.format("epoch = %d, n_images = %d, train_loss = %f, test_loss = %f, test_error = %f", 
+    -- print(string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss = %f", 
+    --      sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val))
+    local results = evaluateModel(model, loss, dataTest, opt.batchSize)
+    print(string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
+    sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val, results.loss, 1.0 - results.correct1))
+    -- print(string.format("epoch = %d, n_images = %d, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
     --      sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val, results.loss, 1.0 - results.correct1))
     --[[ errorLog{nImages = sgdState.nSampledImages or 0,
              error = 1.0 - results.correct1}
