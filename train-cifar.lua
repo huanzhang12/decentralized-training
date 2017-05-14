@@ -130,7 +130,7 @@ sgdState = {
 
    momentum     = 0.9,
    dampening    = 0,
-   nesterov     = false,
+   nesterov     = true,
    --]]
    --- For rmsprop, which is very fiddly and I don't trust it at all ---
    --[[
