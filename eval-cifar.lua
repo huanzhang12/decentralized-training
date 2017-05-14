@@ -59,7 +59,7 @@ end
 
 for epoch = opt.startEpoch, opt.endEpoch do
   for r = 1,opt.maxRank do
-    local model_file = opt.loadPrefix.."_rank_"..r.."/"..epoch..".model.t7"
+    local model_file = opt.loadPrefix.."/rank_"..r.."/"..epoch..".model.t7"
     local model = torch.load(model_file)
     evalModel(epoch, model)
     model = nil
