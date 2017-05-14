@@ -28,6 +28,7 @@ require 'nngraph'
 require 'train-helpers'
 local nninit = require 'nninit'
 local posix = require 'posix'
+local pretty_write = require 'pl.pretty'.write
 
 -- Feel free to comment these out.
 --[[
@@ -59,6 +60,7 @@ opt = lapp[[
       --chunkSize       (default 8192)           TCP-IP transfer chunk size (important to maximize transfer rate)
       --useCPUforComm   (default 1)              Set to 0 to use GPU memory in comminucation threads
       --dynBatchSize    (default 0)              Set to 1 to use dynamic batch size
+      --saveDir         (default ".")            Model checkpoints path
 ]]
 print(opt)
 
@@ -67,6 +69,8 @@ if opt.dstalg == "dstsgd" then
   -- we will change this dynamically
   opt.iterSize = 9999999
 end
+-- rank of this machine
+self_rank = 1
 
 -- create data loader
 dataTrain = Dataset.CIFAR(opt.dataRoot, "train", opt.batchSize)
@@ -126,7 +130,7 @@ sgdState = {
 
    momentum     = 0.9,
    dampening    = 0,
-   nesterov     = true,
+   nesterov     = false,
    --]]
    --- For rmsprop, which is very fiddly and I don't trust it at all ---
    --[[
@@ -237,6 +241,21 @@ function forwardBackwardBatch(checkExitCond)
     return loss_val, gradients, inputs:size(1) * N
 end
 
+local model_save_dir = opt.saveDir .. "/" .. os.date("%m%d%H%M") .. "_rank_" .. self_rank .. "/"
+print("Models will be saved to "..model_save_dir)
+os.execute("mkdir -p "..model_save_dir)
+local log = assert(io.open(model_save_dir .. "log.txt", "w"))
+log:write(pretty_write(opt))
+log:write("\n")
+log:flush()
+function saveModel(epoch, msg)
+    model_name = model_save_dir .. epoch .. ".model.t7"
+    state_name = model_save_dir .. epoch .. ".state.t7"
+    torch.save(model_name, model:clearState())
+    torch.save(state_name, sgdState)
+    log:write(msg .. "\n")
+    log:flush()
+end
 
 function evalModel(loss_val, time, average_batch, max_batch)
     loss_val = loss_val or 0
@@ -246,8 +265,10 @@ function evalModel(loss_val, time, average_batch, max_batch)
     -- print(string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss = %f", 
     --      sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val))
     local results = evaluateModel(model, loss, dataTest, opt.batchSize)
-    print(string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
-    sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val, results.loss, 1.0 - results.correct1))
+    local msg = string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
+    sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val, results.loss, 1.0 - results.correct1)
+    print(msg)
+    saveModel(sgdState.epochCounter, msg)
     -- print(string.format("epoch = %d, n_images = %d, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
     --      sgdState.epochCounter or 0, sgdState.nSampledImages or 0, loss_val, results.loss, 1.0 - results.correct1))
     --[[ errorLog{nImages = sgdState.nSampledImages or 0,

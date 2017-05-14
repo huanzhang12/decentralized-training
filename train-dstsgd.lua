@@ -32,7 +32,7 @@ function TrainingHelpers.Init(opt, params)
    end
    TrainingHelpers.dstsgd = DecentralizedSGD.Trainer(TrainingHelpers.nodes, TrainingHelpers.weights, opt.nodeID, {params}, true, opt.chunkSize)
    print("Start init")
-   TrainingHelpers.dstsgd.Init()
+   self_rank = TrainingHelpers.dstsgd.Init()
    print("Init done.")
 end
 
