@@ -27,7 +27,9 @@ function TrainingHelpers.Init(opt, params)
    TrainingHelpers.nodes, TrainingHelpers.weights = DecentralizedSGD.LoadConfigFromFile(opt.nodesFile, opt.weightsFile)
    if opt.useCPUforComm == 1 then
       -- this will be used as the buffer for averaging
-      TrainingHelpers.cpuParams = params:float()
+      -- use Pinned memory
+      TrainingHelpers.cpuParams = cutorch.createCudaHostTensor(params:size())
+      TrainingHelpers.cpuParams:copy(params)
       params = TrainingHelpers.cpuParams
    end
    TrainingHelpers.dstsgd = DecentralizedSGD.Trainer(TrainingHelpers.nodes, TrainingHelpers.weights, opt.nodeID, {params}, true, opt.chunkSize)
