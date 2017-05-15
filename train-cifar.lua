@@ -58,7 +58,6 @@ opt = lapp[[
       --weightsFile     (default 'weights.txt')  A text file with weights for parameters from different machines
       --nodeID          (default 0)              Which node is this machine? Set 0 for auto
       --chunkSize       (default 8192)           TCP-IP transfer chunk size (important to maximize transfer rate)
-      --useCPUforComm   (default 1)              Set to 0 to use GPU memory in comminucation threads
       --dynBatchSize    (default 0)              Set to 1 to use dynamic batch size
       --saveDir         (default ".")            Model checkpoints path
       --noEval                                   Do not evaluate, only fakeloss will be printed
