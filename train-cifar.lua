@@ -61,6 +61,7 @@ opt = lapp[[
       --useCPUforComm   (default 1)              Set to 0 to use GPU memory in comminucation threads
       --dynBatchSize    (default 0)              Set to 1 to use dynamic batch size
       --saveDir         (default ".")            Model checkpoints path
+      --noEval                                   Do not evaluate, only fakeloss will be printed
 ]]
 print(opt)
 
@@ -265,7 +266,10 @@ function evalModel(loss_val, time, average_batch, max_batch)
     max_batch = max_batch or opt.batchSize
     -- print(string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss = %f", 
     --      sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val))
-    local results = evaluateModel(model, loss, dataTest, opt.batchSize)
+    local results = {loss=0.0, correct1=1.0}
+    if not opt.noEval then
+        results = evaluateModel(model, loss, dataTest, opt.batchSize)
+    end
     local msg = string.format("epoch = %d, time = %.3f n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
     sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val, results.loss, 1.0 - results.correct1)
     print(msg)
