@@ -30,10 +30,11 @@ require 'train-helpers'
 opt = lapp[[
       --batchSize       (default 128)      Sub-batch size
       --dataRoot        (default ./cifar)  Data root folder
-      --loadPrefix      (default "")      Model checkpoints path prefix (without rank)
-      --maxRank         (default 1)        Max rank to load for averaging
+      --loadPrefix      (default "")       Model checkpoints path prefix (without rank)
+      --maxRank         (default 4)        Max rank to load for averaging
       --startEpoch      (default 1)        Which epoch to start
-      --endEpoch        (default 1)        Which epoch to end
+      --endEpoch        (default 10)       Which epoch to end
+      --debug                              Show acc of each model before average
 ]]
 print(opt)
 
@@ -58,12 +59,32 @@ function evalModel(epoch, model)
 end
 
 for epoch = opt.startEpoch, opt.endEpoch do
+  local models = { }
   for r = 1,opt.maxRank do
     local model_file = opt.loadPrefix.."/rank_"..r.."/"..epoch..".model.t7"
+    print("loading "..model_file)
     local model = torch.load(model_file)
-    evalModel(epoch, model)
-    model = nil
-    collectgarbage(); collectgarbage(); collectgarbage()
+    table.insert(models, model)
   end
+  -- add all models
+  print("averaging "..opt.maxRank.." models")
+  local weights = models[1]:getParameters()
+  if opt.debug then
+    evalModel(epoch, models[1])
+  end
+  for r = 2,opt.maxRank do
+    local next_weights = models[r]:getParameters()
+    if opt.debug then
+      evalModel(epoch, models[r])
+    end
+    weights:add(next_weights)
+    models[r] = nil
+  end
+  -- average
+  weights:mul(1.0 / opt.maxRank)
+  print("evaluating...")
+  evalModel(epoch, models[1])
+  models[1] = nil
+  collectgarbage(); collectgarbage(); collectgarbage()
 end
 
