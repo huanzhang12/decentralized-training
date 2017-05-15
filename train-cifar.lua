@@ -61,6 +61,8 @@ opt = lapp[[
       --dynBatchSize    (default 0)              Set to 1 to use dynamic batch size
       --saveDir         (default ".")            Model checkpoints path
       --noEval                                   Do not evaluate, only fakeloss will be printed
+      --lrDecay1        (default 80)             first learning rate decay > epoch
+      --lrDecay2        (default 120)            second learning rate decay > epoch
 ]]
 print(opt)
 
@@ -200,9 +202,9 @@ function forwardBackwardBatch(checkExitCond)
     --]]
 
     -- From https://github.com/bgshih/cifar.torch/blob/master/train.lua#L119-L128
-    if sgdState.epochCounter < 80 then
+    if sgdState.epochCounter < opt.lrDecay1 then
         sgdState.learningRate = 0.1
-    elseif sgdState.epochCounter < 120 then
+    elseif sgdState.epochCounter < opt.lrDecay2 then
         sgdState.learningRate = 0.01
     else
         sgdState.learningRate = 0.001
@@ -269,8 +271,8 @@ function evalModel(loss_val, time, average_batch, max_batch)
     if not opt.noEval then
         results = evaluateModel(model, loss, dataTest, opt.batchSize)
     end
-    local msg = string.format("epoch = %d, time = %.3f, n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
-    sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val, results.loss, 1.0 - results.correct1)
+    local msg = string.format("epoch = %d, time = %.3f, n_images = %d, avg_batch_size = %.2f, max_batch_size = %.2f, train_loss (fake) = %f, test_loss = %f, test_error = %f, learning_rate = %f", 
+    sgdState.epochCounter or 0, time, sgdState.nSampledImages or 0, average_batch, max_batch, loss_val, results.loss, 1.0 - results.correct1, sgdState.learningRate)
     print(msg)
     saveModel(sgdState.epochCounter, msg)
     -- print(string.format("epoch = %d, n_images = %d, train_loss (fake) = %f, test_loss = %f, test_error = %f", 
