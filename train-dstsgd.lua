@@ -19,7 +19,7 @@ freely, subject to the following restrictions:
 --]]
 
 
-require 'optim'
+sgd = require 'sgd'
 local DecentralizedSGD = require 'dstsgd'
 TrainingHelpers = {}
 
@@ -29,7 +29,8 @@ function TrainingHelpers.Init(opt, params)
    -- use Pinned memory
    TrainingHelpers.cpuParams = cutorch.createCudaHostTensor(params:size())
    TrainingHelpers.cpuParams:copy(params)
-   TrainingHelpers.dstsgd = DecentralizedSGD.Trainer(TrainingHelpers.nodes, TrainingHelpers.weights, opt.nodeID, {TrainingHelpers.cpuParams}, true, opt.chunkSize, true)
+   TrainingHelpers.input_weights = torch.CudaTensor(params:size())
+   TrainingHelpers.dstsgd = DecentralizedSGD.Trainer(TrainingHelpers.nodes, TrainingHelpers.weights, opt.nodeID, {TrainingHelpers.cpuParams}, true, opt.chunkSize, true, params:storage(), TrainingHelpers.input_weights:storage())
    print("Start init")
    self_rank = TrainingHelpers.dstsgd.Init()
    print("Init done.")
@@ -48,10 +49,7 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
    sgdState.thisEpochImages = sgdState.thisEpochImages or 0
    sgdState.thisEpochMaxBatch = sgdState.thisEpochMaxBatch or 0
    sgdState.thisEpochEvalCounter = sgdState.thisEpochEvalCounter or 0
-   local whichOptimMethod = optim.sgd
-   if sgdState.whichOptimMethod then
-       whichOptimMethod = optim[sgdState.whichOptimMethod]
-   end
+   sgdState.whichOptimMethod = sgd
    -- copy the initial weights
    if opt.useCPUforComm == 1 then
       TrainingHelpers.cpuParams:copy(weights)
@@ -74,11 +72,12 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
          dstsgd.WaitForServerSyncDone()
       end
       -- the average has been taken at the server communication thread
-      weights:copy(TrainingHelpers.cpuParams)
+      -- weights:copy(TrainingHelpers.cpuParams)
       -- SGD step: modifies weights in-place
-      whichOptimMethod(function() return loss_val, gradients end, weights, sgdState)
+      sgd(function() return loss_val, gradients end, TrainingHelpers.input_weights, weights, sgdState)
       -- copy weights back to CPU for communication
-      TrainingHelpers.cpuParams:copy(weights)
+      -- this will be done in the server thread
+      -- TrainingHelpers.cpuParams:copy(weights)
       -- weights update done, start next communication iteration
       dstsgd.StartNextIter()
       -- Display progress and loss
