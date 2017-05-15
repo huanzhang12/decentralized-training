@@ -25,7 +25,7 @@ while True:
         break
 i = 0
 for host in hosts:
-    f.write("{}:{}\n".format(host, r * 1000 + i))
+    f.write("{0}:{1}\n".format(host, r * 1000 + i))
     i = i + 1
 f.close()
 
