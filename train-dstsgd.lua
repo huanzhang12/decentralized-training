@@ -105,7 +105,9 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
          sgdState.thisEpochMaxBatch = 0
          -- print("\n\n----- Epoch "..sgdState.epochCounter.." -----")
          if (sgdState.epochCounter or 0) > opt.maxIter then
+            dstsgd.WaitForServerSyncDone()
             dstsgd.SetExitFlag()
+            dstsgd.StartNextIter()
             print("Training complete, go home")
             dstsgd.Terminate()
             os.exit()
