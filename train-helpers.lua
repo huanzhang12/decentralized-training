@@ -94,6 +94,10 @@ function TrainingHelpers.trainForever(forwardBackwardBatch, weights, sgdState, e
          epoch_loss_val = epoch_loss_val / dataTrain:size() * opt.batchSize
          if afterEpoch then afterEpoch(epoch_loss_val, timer:time().real) end
          epoch_loss_val = 0
+         if (sgdState.epochCounter or 0) > opt.maxIter then
+            print("Training complete, go home")
+            os.exit()
+         end
          -- print("\n\n----- Epoch "..sgdState.epochCounter.." -----")
          timer:resume()
       end
